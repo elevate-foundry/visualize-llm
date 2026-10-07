@@ -11,7 +11,7 @@ import type {
 import { WebSocketClient } from '../api/websocket';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'loading';
-export type ViewTab = 'heatmap' | 'firing' | 'network' | 'ablation' | 'experiments';
+export type ViewTab = 'heatmap' | 'firing' | 'network' | 'ablation' | 'batch' | 'interference' | 'experiments';
 export type ColorScale = 'fire' | 'viridis' | 'plasma' | 'cool';
 
 interface AppState {

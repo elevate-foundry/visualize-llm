@@ -122,6 +122,9 @@ export type WSMessage =
       layers_affected: number;
       mean_cosine_sim: number;
       mean_diff_norm: number;
+      concept_recall_normal?: number;
+      concept_recall_ablated?: number;
+      erasure_score?: number;
     };
 
 // ── Experiments (REST API) ──────────────────────────────────────────────

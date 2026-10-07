@@ -34,7 +34,7 @@ export function AblationPanel() {
         setLogEntries((prev) => [
           ...prev,
           {
-            message: `Done! Directional ablation on ${msg.layers_affected} layers (alpha=${msg.alpha}, cos_sim=${msg.mean_cosine_sim}, diff_norm=${msg.mean_diff_norm})`,
+            message: `Done! Directional ablation on ${msg.layers_affected} layers (alpha=${msg.alpha}, cos_sim=${msg.mean_cosine_sim}, diff_norm=${msg.mean_diff_norm}${msg.erasure_score !== undefined ? `, erasure=${(msg.erasure_score * 100).toFixed(0)}%` : ''})`,
             status: 'complete',
           },
         ]);

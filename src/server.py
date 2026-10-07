@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.models.loader import LocalModelBackend, ModelBackend
 from src.ablation.prompts import make_concept_prompts, make_baseline_prompts
+from src.ablation.metrics import concept_recall
 from src.experiments.store import ExperimentStore
 from src.experiments.schemas import Experiment, ExperimentResult, ConceptDirection
 
@@ -158,6 +159,51 @@ async def switch_model(body: dict):
             return {"status": "ok", "model_info": info}
         except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── REST API: Batch & Interference ────────────────────────────────────────
+
+@app.post("/api/batch")
+async def run_batch_endpoint(body: dict):
+    """Run batch ablation experiments."""
+    from src.experiments.batch import BatchConfig, run_batch
+    config = BatchConfig(
+        concepts=body.get("concepts", ["dog"]),
+        prompts=body.get("prompts", ["A dog is a wonderful pet because"]),
+        alphas=body.get("alphas", [1.0]),
+        max_tokens=body.get("max_tokens", 32),
+    )
+    results = []
+    for result in run_batch(backend, store, config):
+        results.append({
+            "concept": result.concept,
+            "prompt": result.prompt,
+            "alpha": result.alpha,
+            "normal_text": result.normal_text,
+            "ablated_text": result.ablated_text,
+            "concept_recall_normal": result.concept_recall_normal,
+            "concept_recall_ablated": result.concept_recall_ablated,
+            "erasure_score": result.erasure_score,
+            "layers_affected": result.layers_affected,
+            "mean_cosine_sim": round(result.mean_cosine_sim, 4),
+            "mean_diff_norm": round(result.mean_diff_norm, 4),
+            "experiment_id": result.experiment_id,
+        })
+    return {"results": results, "total": len(results)}
+
+
+@app.post("/api/interference")
+async def interference_endpoint(body: dict):
+    """Compute concept interference matrix."""
+    from src.ablation.interference import compute_interference
+    concepts = body.get("concepts", ["dog", "cat", "math"])
+    result = compute_interference(backend, concepts)
+    return {
+        "concepts": result.concepts,
+        "matrix": result.matrix,
+        "per_layer_matrices": {str(k): v for k, v in result.per_layer_matrices.items()},
+        "direction_norms": result.direction_norms,
+    }
 
 
 # ── WebSocket handler ─────────────────────────────────────────────────────
@@ -348,9 +394,16 @@ async def _handle_ablate(ws: WebSocket, msg: dict) -> None:
 
     backend.remove_ablation()
 
+    # Compute quality metrics
+    normal_text = "".join(normal_tokens)
+    ablated_text = "".join(ablated_tokens)
+    recall_normal = concept_recall(normal_text, concept)
+    recall_ablated = concept_recall(ablated_text, concept)
+    erasure_score = 1.0 - recall_ablated
+
     await ws.send_text(json.dumps({
         "type": "ablation_ablated",
-        "text": "".join(ablated_tokens),
+        "text": ablated_text,
         "tokens": ablated_tokens,
         "prefill": ablated_prefill,
     }))
@@ -358,21 +411,32 @@ async def _handle_ablate(ws: WebSocket, msg: dict) -> None:
     store.add_result(ExperimentResult(
         experiment_id=exp_id,
         variant="ablated",
-        output_text="".join(ablated_tokens),
+        output_text=ablated_text,
         tokens=ablated_tokens,
+        metrics={
+            "concept_recall": round(recall_ablated, 4),
+            "erasure_score": round(erasure_score, 4),
+            "alpha": alpha,
+            "layers_affected": len(directions),
+            "mean_cosine_sim": round(float(np.mean(result["cosine_sims"])), 4),
+            "mean_diff_norm": round(float(np.mean(result["norms"])), 4),
+        },
     ))
 
     await ws.send_text(json.dumps({
         "type": "ablation_complete",
         "concept": concept,
         "experiment_id": exp_id,
-        "normal_text": "".join(normal_tokens),
-        "ablated_text": "".join(ablated_tokens),
+        "normal_text": normal_text,
+        "ablated_text": ablated_text,
         "method": "directional",
         "alpha": alpha,
         "layers_affected": len(directions),
         "mean_cosine_sim": round(float(np.mean(result["cosine_sims"])), 4),
         "mean_diff_norm": round(float(np.mean(result["norms"])), 4),
+        "concept_recall_normal": round(recall_normal, 4),
+        "concept_recall_ablated": round(recall_ablated, 4),
+        "erasure_score": round(erasure_score, 4),
     }))
 
 

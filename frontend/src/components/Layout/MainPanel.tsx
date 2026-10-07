@@ -3,12 +3,18 @@ import { LayerHeatmap } from '../Visualization/LayerHeatmap';
 import { FiringRateChart } from '../Visualization/FiringRateChart';
 import { NetworkView } from '../Visualization/NetworkView';
 import { AblationPanel } from '../Ablation/AblationPanel';
+import { ExperimentHistory } from '../Experiments/ExperimentHistory';
+import { BatchRunner } from '../Experiments/BatchRunner';
+import { InterferenceMatrix } from '../Experiments/InterferenceMatrix';
 
 const TABS: { key: ViewTab; label: string }[] = [
   { key: 'heatmap', label: 'Layer Heatmap' },
   { key: 'firing', label: 'Firing Rate' },
   { key: 'network', label: 'Network View' },
   { key: 'ablation', label: 'Ablation' },
+  { key: 'batch', label: 'Batch' },
+  { key: 'interference', label: 'Interference' },
+  { key: 'experiments', label: 'History' },
 ];
 
 export function MainPanel() {
@@ -41,6 +47,15 @@ export function MainPanel() {
       </div>
       <div className="viz-panel" id="panel-ablation" style={{ display: activeTab === 'ablation' ? undefined : 'none' }}>
         <AblationPanel />
+      </div>
+      <div className="viz-panel" id="panel-batch" style={{ display: activeTab === 'batch' ? undefined : 'none' }}>
+        <BatchRunner />
+      </div>
+      <div className="viz-panel" id="panel-interference" style={{ display: activeTab === 'interference' ? undefined : 'none' }}>
+        <InterferenceMatrix />
+      </div>
+      <div className="viz-panel" id="panel-experiments" style={{ display: activeTab === 'experiments' ? undefined : 'none' }}>
+        <ExperimentHistory />
       </div>
     </div>
   );
