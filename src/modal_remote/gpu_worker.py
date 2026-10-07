@@ -23,7 +23,7 @@ image = (
         "numpy>=1.24",
         "safetensors>=0.4",
     )
-    .env({"HF_HUB_CACHE": "/cache", "HF_XET_HIGH_PERFORMANCE": "1"})
+    .env({"HF_HUB_CACHE": "/cache", "HF_XET_HIGH_PERFORMANCE": "1", "MODEL_NAME": "Qwen/Qwen3-0.6B"})
 )
 
 app = modal.App("neuron-visualizer", image=image)
@@ -39,8 +39,6 @@ vol = modal.Volume.from_name("hf-hub-cache", create_if_missing=True)
 class ModelWorker:
     """Remote model worker that runs on Modal GPUs."""
 
-    model_name: str = modal.parameter(default="Qwen/Qwen3-0.6B")
-
     @modal.enter()
     def load(self):
         """Load model and set up hooks on container start."""
@@ -50,6 +48,7 @@ class ModelWorker:
         # Import our modules — they're bundled in the image
         # For now, we inline the critical logic since the full src package
         # isn't in the Modal image. The client handles serialization.
+        self.model_name = os.environ.get("MODEL_NAME", "Qwen/Qwen3-0.6B")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Loading {self.model_name} on {self.device}...")
 

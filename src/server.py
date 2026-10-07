@@ -18,11 +18,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.models.loader import LocalModelBackend, ModelBackend
-from src.ablation.prompts import make_concept_prompts, make_baseline_prompts
-from src.ablation.metrics import concept_recall
 from src.experiments.store import ExperimentStore
 from src.experiments.schemas import Experiment, ExperimentResult, ConceptDirection
+
+# Heavy ML imports are lazy — not needed in Modal-only mode
+def _import_local_deps():
+    from src.models.loader import LocalModelBackend
+    from src.ablation.prompts import make_concept_prompts, make_baseline_prompts
+    from src.ablation.metrics import concept_recall
+    return LocalModelBackend, make_concept_prompts, make_baseline_prompts, concept_recall
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +40,9 @@ MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen3-0.6B")
 DEVICE = os.environ.get("DEVICE", "auto")
 DB_PATH = os.environ.get("DB_PATH", "data/experiments.db")
 LOCAL_FILES_ONLY = os.environ.get("LOCAL_FILES_ONLY", "true").lower() == "true"
+# Set BACKEND_MODE=modal to skip local model loading (Railway + Modal deployment)
+BACKEND_MODE = os.environ.get("BACKEND_MODE", "local")
+MODAL_GPU = os.environ.get("MODAL_GPU", "L40S")
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────
@@ -44,11 +51,22 @@ LOCAL_FILES_ONLY = os.environ.get("LOCAL_FILES_ONLY", "true").lower() == "true"
 async def lifespan(app: FastAPI):
     global backend, store
     store = ExperimentStore(DB_PATH)
-    backend = LocalModelBackend(
-        model_name=MODEL_NAME,
-        device=DEVICE,
-        local_files_only=LOCAL_FILES_ONLY,
-    )
+    if BACKEND_MODE == "modal":
+        logger.info("Starting in Modal-only mode (no local model)")
+        try:
+            from src.modal_remote.client import ModalModelBackend
+            backend = ModalModelBackend(model_name=MODEL_NAME, gpu=MODAL_GPU)
+            logger.info(f"Modal backend configured: {MODEL_NAME} on {MODAL_GPU}")
+        except Exception as e:
+            logger.warning(f"Modal backend init failed: {e}. Server running without model.")
+            backend = None
+    else:
+        LocalModelBackend, _, _, _ = _import_local_deps()
+        backend = LocalModelBackend(
+            model_name=MODEL_NAME,
+            device=DEVICE,
+            local_files_only=LOCAL_FILES_ONLY,
+        )
     yield
     store.close()
 
@@ -161,6 +179,18 @@ async def switch_model(body: dict):
             return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# ── Health check ──────────────────────────────────────────────────────────
+
+@app.get("/api/health")
+async def health():
+    return {
+        "status": "ok",
+        "backend_mode": BACKEND_MODE,
+        "has_model": backend is not None,
+        "model": backend.get_model_info()["name"] if backend else None,
+    }
+
+
 # ── REST API: Batch & Interference ────────────────────────────────────────
 
 @app.post("/api/batch")
@@ -217,15 +247,29 @@ async def websocket_endpoint(ws: WebSocket):
             data = await ws.receive_text()
             msg = json.loads(data)
 
-            if msg["type"] == "generate":
+            if msg["type"] == "model_info":
+                if backend:
+                    info = backend.get_model_info()
+                    await ws.send_text(json.dumps({"type": "model_info", "data": info}))
+                else:
+                    await ws.send_text(json.dumps({
+                        "type": "model_info",
+                        "data": {"name": "No model loaded", "num_layers": 0, "hidden_size": 0,
+                                 "num_attention_heads": 0, "num_kv_heads": 0, "intermediate_size": 0,
+                                 "vocab_size": 0, "total_params": "0", "device": "none"},
+                    }))
+
+            elif not backend:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "No model loaded. Switch to a model via the Model Selector.",
+                }))
+
+            elif msg["type"] == "generate":
                 await _handle_generate(ws, msg)
 
             elif msg["type"] == "ablate":
                 await _handle_ablate(ws, msg)
-
-            elif msg["type"] == "model_info":
-                info = backend.get_model_info()
-                await ws.send_text(json.dumps({"type": "model_info", "data": info}))
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
@@ -301,6 +345,7 @@ async def _handle_ablate(ws: WebSocket, msg: dict) -> None:
     )
     exp_id = store.create_experiment(exp)
 
+    _, make_concept_prompts, make_baseline_prompts, _ = _import_local_deps()
     concept_prompts = make_concept_prompts(concept)
     baseline_prompts = make_baseline_prompts()
 
@@ -395,10 +440,11 @@ async def _handle_ablate(ws: WebSocket, msg: dict) -> None:
     backend.remove_ablation()
 
     # Compute quality metrics
+    _, _, _, concept_recall_fn = _import_local_deps()
     normal_text = "".join(normal_tokens)
     ablated_text = "".join(ablated_tokens)
-    recall_normal = concept_recall(normal_text, concept)
-    recall_ablated = concept_recall(ablated_text, concept)
+    recall_normal = concept_recall_fn(normal_text, concept)
+    recall_ablated = concept_recall_fn(ablated_text, concept)
     erasure_score = 1.0 - recall_ablated
 
     await ws.send_text(json.dumps({

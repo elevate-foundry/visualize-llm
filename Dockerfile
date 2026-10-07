@@ -16,8 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# BACKEND_MODE=modal: lightweight install (no torch/transformers)
+# BACKEND_MODE=local: full install with ML deps
+ARG BACKEND_MODE=local
+ENV BACKEND_MODE=${BACKEND_MODE}
+
+COPY requirements.txt requirements-modal.txt pyproject.toml ./
+RUN if [ "$BACKEND_MODE" = "modal" ]; then \
+        pip install --no-cache-dir -r requirements-modal.txt; \
+    else \
+        pip install --no-cache-dir .; \
+    fi
 
 # Copy source
 COPY src/ src/

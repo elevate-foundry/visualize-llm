@@ -34,7 +34,7 @@ class ModalModelBackend(ModelBackend):
         if self._worker is None:
             import modal
             Cls = modal.Cls.from_name("neuron-visualizer", "ModelWorker")
-            self._worker = Cls(model_name=self.model_name)
+            self._worker = Cls()
         return self._worker
 
     def get_model_info(self) -> dict:
