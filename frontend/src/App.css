@@ -217,6 +217,7 @@ body {
   transition: all 0.2s;
 }
 
+.viz-tab:hover:not(.active) { background: var(--bg3); color: var(--text); }
 .viz-tab.active { background: var(--accent); color: white; }
 
 .viz-panel {
@@ -421,3 +422,17 @@ body {
   text-align: center;
   margin-bottom: 4px;
 }
+
+.exp-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.exp-item:hover { border-color: var(--accent); background: var(--bg3); }
+.exp-item.selected { background: var(--bg3); border-color: var(--accent); }

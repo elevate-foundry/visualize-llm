@@ -29,6 +29,7 @@ export function ExperimentHistory() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!confirm(`Delete experiment #${id}?`)) return;
     await deleteExperiment(id);
     if (selected?.experiment.id === id) setSelected(null);
     refresh();
@@ -78,16 +79,8 @@ export function ExperimentHistory() {
         {experiments.map((exp) => (
           <div
             key={exp.id}
+            className={`exp-item${selected?.experiment.id === exp.id ? ' selected' : ''}`}
             onClick={() => handleSelect(exp)}
-            style={{
-              background: selected?.experiment.id === exp.id ? 'var(--bg3)' : 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              padding: '8px 10px',
-              marginBottom: 4,
-              cursor: 'pointer',
-              fontSize: 11,
-            }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600 }}>#{exp.id}</span>

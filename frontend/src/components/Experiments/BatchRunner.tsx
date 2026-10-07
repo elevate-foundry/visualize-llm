@@ -17,16 +17,18 @@ interface BatchResult {
 
 export function BatchRunner() {
   const [concepts, setConcepts] = useState('dog, cat, math');
-  const [prompts, setPrompts] = useState('A dog is a wonderful pet because\nThe square root of 144 is');
+  const [prompts, setPrompts] = useState('A dog is a wonderful pet because\nThe cat sat on the warm\nThe square root of 144 is');
   const [alphas, setAlphas] = useState('0.5, 1.0, 1.5');
   const [maxTokens, setMaxTokens] = useState(20);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<BatchResult[]>([]);
   const [sortBy, setSortBy] = useState<'erasure_score' | 'concept' | 'alpha'>('erasure_score');
+  const [error, setError] = useState<string | null>(null);
 
   const handleRun = useCallback(async () => {
     setRunning(true);
     setResults([]);
+    setError(null);
     try {
       const res = await fetch('/api/batch', {
         method: 'POST',
@@ -38,10 +40,14 @@ export function BatchRunner() {
           max_tokens: maxTokens,
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setResults(data.results || []);
     } catch (e: any) {
-      alert('Batch failed: ' + e.message);
+      setError(e.message || 'Batch failed');
     } finally {
       setRunning(false);
     }
@@ -172,6 +178,22 @@ export function BatchRunner() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--red)' }}>
+          {error}
+        </div>
+      )}
+
+      {running && results.length === 0 && (
+        <div className="empty-state" style={{ flex: 1 }}>
+          <div className="spinner" style={{ width: 24, height: 24, borderWidth: 3 }} />
+          <div>Running batch experiments...</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            This may take a while depending on the number of combinations
+          </div>
         </div>
       )}
 

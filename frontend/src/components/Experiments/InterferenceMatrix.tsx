@@ -16,9 +16,11 @@ export function InterferenceMatrix() {
   const [data, setData] = useState<InterferenceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedLayer, setSelectedLayer] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCompute = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/interference', {
         method: 'POST',
@@ -27,11 +29,15 @@ export function InterferenceMatrix() {
           concepts: concepts.split(',').map((s) => s.trim()).filter(Boolean),
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
       const result = await res.json();
       setData(result);
       setSelectedLayer(null);
     } catch (e: any) {
-      alert('Failed: ' + e.message);
+      setError(e.message || 'Computation failed');
     } finally {
       setLoading(false);
     }
@@ -62,6 +68,12 @@ export function InterferenceMatrix() {
           {loading ? 'Computing...' : 'Compute'}
         </button>
       </div>
+
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--red)' }}>
+          {error}
+        </div>
+      )}
 
       {data && (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
