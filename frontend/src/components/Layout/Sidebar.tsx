@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useAppStore, type ColorScale } from '../../store';
+import { ModelSelector } from '../Controls/ModelSelector';
 
 export function Sidebar() {
   const status = useAppStore((s) => s.status);
@@ -50,6 +51,7 @@ export function Sidebar() {
 
   return (
     <div className="sidebar">
+      <ModelSelector />
       <div>
         <div className="section-title">Prompt</div>
         <textarea

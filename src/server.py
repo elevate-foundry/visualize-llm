@@ -122,8 +122,42 @@ async def delete_experiment(exp_id: int):
 @app.get("/api/models")
 async def list_models():
     """Return info about the currently loaded model and available profiles."""
+    from src.models.profiles import KNOWN_PROFILES
     info = backend.get_model_info() if backend else {}
-    return {"current": info}
+    profiles = {k: {"name": v.name, "has_gated_mlp": v.has_gated_mlp} for k, v in KNOWN_PROFILES.items()}
+    return {"current": info, "profiles": profiles}
+
+
+@app.post("/api/models/switch")
+async def switch_model(body: dict):
+    """Switch to a different model. Supports local and Modal backends.
+
+    Body: {model_name: str, backend: 'local' | 'modal', gpu?: str}
+    """
+    global backend
+    model_name = body.get("model_name", MODEL_NAME)
+    backend_type = body.get("backend", "local")
+
+    if backend_type == "modal":
+        try:
+            from src.modal_remote.client import ModalModelBackend
+            gpu = body.get("gpu", "L40S")
+            backend = ModalModelBackend(model_name=model_name, gpu=gpu)
+            info = backend.get_model_info()
+            return {"status": "ok", "model_info": info}
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+    else:
+        try:
+            backend = LocalModelBackend(
+                model_name=model_name,
+                device=DEVICE,
+                local_files_only=False,  # allow downloading new models
+            )
+            info = backend.get_model_info()
+            return {"status": "ok", "model_info": info}
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ── WebSocket handler ─────────────────────────────────────────────────────
