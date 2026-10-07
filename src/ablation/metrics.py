@@ -58,7 +58,7 @@ def direction_magnitude_stats(directions: dict[int, torch.Tensor]) -> dict:
     Returns dict with mean_norm, max_norm, min_norm, std_norm across layers.
     """
     if not directions:
-        return {"mean_norm": 0.0, "max_norm": 0.0, "min_norm": 0.0, "std_norm": 0.0}
+        return {"mean_norm": 0.0, "max_norm": 0.0, "min_norm": 0.0, "std_norm": 0.0, "num_layers": 0}
 
     norms = [d.norm().item() for d in directions.values()]
     return {
